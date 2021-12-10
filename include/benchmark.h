@@ -1,13 +1,11 @@
 #ifndef CORSAC_BENCHMARK
 #define CORSAC_BENCHMARK
-
-#include <vector>
 #include <functional>
 #include <iostream>
 #include <chrono>
-#include <string>
-#include <algorithm>
+#include <ctime>
 #include <numeric>
+#include <fstream>
 
 namespace corsac{
 	class BenchmarkManager;
@@ -18,6 +16,7 @@ namespace corsac{
 			std::string name;
 			std::vector<unsigned int> amount_operations;
 			std::vector<unsigned int> times;
+			std::string date;
 
 		public: 
 			std::function<int()> bench;
@@ -28,9 +27,14 @@ namespace corsac{
 				this->name = name;
 			}
 
-			void add_time(unsigned int time)
+			std::string get_name()
 			{
-				this->times.push_back(time);
+				return this->name;
+			}
+
+			std::string get_date()
+			{
+				return this->date;
 			}
 
 			void add_operation(unsigned int amount_operation)
@@ -38,8 +42,63 @@ namespace corsac{
 				this->amount_operations.push_back(amount_operation);
 			}
 
+			unsigned int get_operation(int index)
+			{
+				return this->amount_operations[index];
+			}
+
+			unsigned int get_max_operation()
+			{
+				return this->amount_operations.back();	
+			}
+
+			unsigned int get_median_operation()
+			{
+				return this->amount_operations[this->amount_operations.size()/2];	
+			}
+
+			unsigned int get_average_operation()
+			{
+				return (accumulate(	this->amount_operations.begin(), 
+									this->amount_operations.end(), 
+									0)/this->amount_operations.size());
+			}
+
+			void add_time(unsigned int time)
+			{
+				this->times.push_back(time);
+			}
+
+
+			float get_time(int index)
+			{
+				return static_cast<float>(this->times[index])/1000000;
+			}
+
+			float get_max_time()
+			{
+				return static_cast<float>(this->times.back())/1000000;	
+			}
+
+			float get_median_time()
+			{
+				return static_cast<float>(this->times[this->times.size()/2])/1000000;	
+			}
+
+			float get_average_time()
+			{
+				return static_cast<float>(accumulate(	this->times.begin(), 
+									this->times.end(), 
+									0)/this->times.size())/1000000;
+			}
+
 			void start_bench(int amount)
 			{
+				std::time_t date = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
+
+				this->date = std::ctime(&date);
+
 				for(unsigned int c = 0; c < amount; c++)
 				{
 					std::cout << "\r " << this->name << " time test " << c << "/" << amount;
@@ -67,11 +126,19 @@ namespace corsac{
 					this->amount_operations.push_back(amount_operation);
 
 				}
+
+				std::sort(
+							this->amount_operations.begin(),
+							this->amount_operations.end()
+						);
+
+				std::sort(
+						this->times.begin(),
+						this->times.end()
+						);
+
 				std::cout << "\r                                               \r";
 			}
-			
-			//Переписать
-			friend class BenchmarkManager;
 	};
 
 
@@ -80,6 +147,7 @@ namespace corsac{
 		private:
 			std::vector<Bench> benchs;
 			unsigned int amount = 100;
+			const std::string name_file_result = "Benchmark results.csv";
 		public:
 			BenchmarkManager(){}
 
@@ -104,76 +172,115 @@ namespace corsac{
 				for(int i = 0; i < this->benchs.size(); i++)
 				{
 					this->benchs[i].start_bench(this->amount);
-
-					std::sort(
-						this->benchs[i].amount_operations.begin(),
-						this->benchs[i].amount_operations.end()
-						);
-
-					std::sort(
-						this->benchs[i].times.begin(),
-						this->benchs[i].times.end()
-						);
 				}
+			}
+
+			void save_result()
+			{
+				std::string header = "Amount;Name;Min Time ms;Max Time ms;Avarge Time ms;Median Time ms;Min Operation op/s;Max Operation op/s;Avarge Operation op/s;Median op/s;Time";
+			
+				std::string file_header;
+
+				std::ifstream csv_read(this->name_file_result);
+
+				if (csv_read.is_open())
+				{
+					getline(csv_read, file_header);
+					csv_read.close();
+				}
+
+
+				std::ofstream csv_write(this->name_file_result, std::ios::app);
+				
+				if(!csv_write.is_open())
+				{
+					std::cout << "error write result"<< std::endl;
+				}
+
+				if(file_header != header)
+				{
+					csv_write << header << "\n";	
+				}
+
+
+
+
+				for(int i = 0; i < this->benchs.size(); i++)
+				{
+					csv_write 	<< this->amount << ";";
+
+					csv_write 	<< this->benchs[i].get_name() << ";";
+
+					csv_write 	<< this->benchs[i].get_time(0) << ";";
+
+					csv_write 	<< this->benchs[i].get_max_time() << ";";
+
+					csv_write 	<< this->benchs[i].get_average_time() << ";";
+
+					csv_write 	<< this->benchs[i].get_median_time()  << ";";
+
+
+					csv_write 	<< this->benchs[i].get_operation(0)  << ";";
+					
+					csv_write 	<< this->benchs[i].get_max_operation()  << ";";
+
+					csv_write 	<< this->benchs[i].get_average_operation() << ";";
+
+					csv_write 	<< this->benchs[i].get_median_operation() << ";";
+					
+					csv_write 	<< this->benchs[i].get_date();
+				}
+				csv_write  << "\n";
+				csv_write.close();
 			}
 
 			void print_result()
 			{
 				for(int i = 0; i < this->benchs.size(); i++)
 				{
-
-					unsigned int average_operation = accumulate(	this->benchs[i].amount_operations.begin(), 
-																	this->benchs[i].amount_operations.end(), 
-																	0)/this->benchs[i].amount_operations.size();
-
-					unsigned int average_time = accumulate(	this->benchs[i].times.begin(), 
-															this->benchs[i].times.end(), 
-															0)/this->benchs[i].times.size();
-
-					this->benchs[i].amount_operations;
-					std::cout << this->benchs[i].name << ": " << std::endl;
+					std::cout << this->benchs[i].get_name() << ": " << std::endl;
 					
 					std::cout << "   Time:" << std::endl;
 					std::cout 	<< "      Min: " 
-								<< this->benchs[i].times[0] 
-								<< "ns"
+								<< this->benchs[i].get_time(0) 
+								<< "ms"
 								<< std::endl;
 
 					std::cout 	<< "      Max: " 
-								<< this->benchs[i].times[this->benchs[i].times.size()-1] 
-								<< "ns"
+								<< this->benchs[i].get_max_time()
+								<< "ms"
 								<< std::endl;
 
 					std::cout 	<< "      Average: " 
-								<< average_time 
-								<< "ns"
+								<< this->benchs[i].get_average_time() 
+								<< "ms"
 								<< std::endl;
 
 					std::cout 	<< "      Median: " 
-								<< this->benchs[i].times[this->benchs[i].times.size()/2-1] 
-								<< "ns"
+								<< this->benchs[i].get_median_time() 
+								<< "ms"
 								<< std::endl;
 
 
 
 					std::cout << "   Operations:" << std::endl;
 					std::cout 	<< "      Min: " 
-								<< this->benchs[i].amount_operations[0] 
+								<< this->benchs[i].get_operation(0) 
 								<< "op/s"
 								<< std::endl;
 					
 					std::cout 	<< "      Max: " 
-								<< this->benchs[i].amount_operations[this->benchs[i].amount_operations.size()-1] 
+								<< this->benchs[i].get_max_operation() 
 								<< "op/s"
 								<< std::endl;
 
 					std::cout 	<< "      Average: " 
-								<< average_operation
+								<< this->benchs[i].get_average_operation()
 								<< "op/s"
 								<< std::endl;
 
 					std::cout 	<< "      Median: " 
-								<< this->benchs[i].amount_operations[this->benchs[i].amount_operations.size()/2-1]
+								<< this->benchs[i].get_median_operation()
 								<< "op/s"
 								<< std::endl;
 
